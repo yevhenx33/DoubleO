@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+import json
 
 # Styling configuration
 plt.rcParams['font.family'] = 'sans-serif'
@@ -90,5 +92,5 @@ ax2.grid(True, axis='y', color=COLOR_GRID, linestyle='--', alpha=0.7)
 ax2.spines['top'].set_visible(False)
 ax2.spines['right'].set_visible(False)
 
-plt.tight_layout()
-plt.savefig(os.path.join(data_path, '..', 'comparison_chart.png'), dpi=300, bbox_inches='tight')
+data_dir = os.path.dirname(data_path)
+plt.savefig(os.path.join(data_dir, '..', 'comparison_chart.png'), dpi=300, bbox_inches='tight')
