@@ -316,6 +316,30 @@ Both results are highly significant (p < 0.001) with very large effect sizes (Co
 
 ---
 
+### Phase 4: Zero-Interference Task Scaling (The Breakthrough)
+
+While Phase 3 proved a ~50% reduction in forgetting, interference was still occurring. Root cause analysis revealed that while Chebyshev polynomials successfully routed *activations*, the shared linear projection weights inside the MLP were still suffering from cross-task interference during sequential training.
+
+To solve this, we introduced **Per-Task Diagonal Scaling**:
+1. We freeze **all** shared MLP projection weights after the initial mixed-task pretraining.
+2. We introduce a minimal, learnable `task_scale` parameter vector per task (scaling features immediately before polynomial application).
+3. During sequential training, **only the task-specific scale vector is trained**.
+
+Because `task_scale` is strictly independent per task, cross-task weight updates are mathematically impossible.
+
+#### A/B Test Results (128-dim, 4 Tasks, N=3 seeds)
+
+| Variant | Trainable Params | Mean Forgetting |
+|---|---|---|
+| **Current** (Train Shared MLP) | 524,288 | +1.3994 ± 0.1066 |
+| **Scaled** (Train task_scale only) | **4,096** | **+0.0003 ± 0.0013** |
+
+By restricting training to the 4,096 task scaling parameters (a **0.5% overhead** on the 807K model), we achieved a **~100% reduction** in catastrophic interference. The average forgetting dropped from ~1.4 to statistically zero (+0.0003). We further verified this on the 14K parameter nano-scale model, which achieved a forgetting penalty of **-0.0035** (zero interference).
+
+The combination of **activation-space routing (Chebyshev polynomials)** and **parameter-space isolation (Task Scaling)** yields perfect retention under this training paradigm.
+
+---
+
 ## Reproducibility
 
 ### Experiment 1 (Nano-Scale)
@@ -372,6 +396,15 @@ pip install scipy
 python scripts/run_multiseed.py
 
 # Results saved to data/multiseed/multiseed_summary.json and data/multiseed/multiseed_results.png
+### Experiment 4 (Zero-Interference A/B Test)
+
+Reproduces the Phase 4 breakthrough on an 8-core CPU in ~20 minutes.
+
+```bash
+python scripts/test_task_scale.py
+python scripts/plot_ab_scale.py
+
+# Results saved to data/ab_scale/
 ```
 
 ### Unit Tests
@@ -427,13 +460,16 @@ DoubleO/
 │   ├── results.json                  # Nano-scale eval metrics
 │   ├── extended/                     # Extended datasets (4 domains)
 │   ├── sweep/                        # C-Lite sweep results & logs
-│   └── multiseed/                    # Multi-seed validation results
+│   ├── multiseed/                    # Multi-seed validation results
+│   └── ab_scale/                     # A/B scale test results
 ├── scripts/
-│   ├── train_and_eval.py             # 4-phase Continual Learning Gauntlet
+│   ├── train_and_eval.py             # 4-phase Continual Learning Gauntlet (supports scaling)
 │   ├── plot_results.py               # Nano-scale visualization
 │   ├── run_extended.py               # Extended single-pair experiment
 │   ├── run_sweep.py                  # 8-arm parallel sweep orchestrator
-│   └── run_multiseed.py              # Multi-seed validation (N=5)
+│   ├── run_multiseed.py              # Multi-seed validation (N=5)
+│   ├── test_task_scale.py            # A/B test for zero-interference scaling
+│   └── plot_ab_scale.py              # A/B scale visualization
 ├── src/
 │   ├── model_baseline.py             # StandardGPT (LayerNorm + GELU MLP)
 │   ├── model_double_o.py             # NanoDoubleO (RMSNorm + Chebyshev MLP)

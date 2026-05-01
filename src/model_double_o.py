@@ -46,10 +46,21 @@ class ChebyshevMLP(nn.Module):
         self.c_fc_imag = nn.Linear(config.n_embd, config.n_embd * 2, bias=False)
         self.c_proj_real = nn.Linear(config.n_embd * 2, config.n_embd, bias=False)
         self.c_proj_imag = nn.Linear(config.n_embd * 2, config.n_embd, bias=False)
+        self.use_task_scale = getattr(config, 'use_task_scale', False)
+        if self.use_task_scale:
+            num_tasks = getattr(config, 'num_tasks', 2)
+            self.task_scale = nn.ParameterList([
+                nn.Parameter(torch.ones(config.n_embd * 2)) for _ in range(num_tasks)
+            ])
         
     def forward(self, x, task_idx):
         z_real = self.c_fc_real(x)
         z_imag = self.c_fc_imag(x)
+        
+        if self.use_task_scale:
+            s = self.task_scale[task_idx]
+            z_real = z_real * s
+            z_imag = z_imag * s
         
         if task_idx == 0:
             # Task A: T1 (Linear)
@@ -81,6 +92,8 @@ class DoubleOGPTConfig:
     n_layer: int = 2
     n_head: int = 2
     n_embd: int = 32
+    use_task_scale: bool = False
+    num_tasks: int = 2
 
 class DoubleOGPT(nn.Module):
     def __init__(self, config):

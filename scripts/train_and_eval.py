@@ -83,9 +83,20 @@ def run_gauntlet(model_name, model, math_loader, code_loader, device):
     code_pt = evaluate(model, code_loader, 1, device)
     
     print("\n=== Phase 2: Freezing Core Network ===")
-    for name, param in model.named_parameters():
-        if 'mlp' not in name:
+    has_task_scale = any('task_scale' in name for name, _ in model.named_parameters())
+    
+    if has_task_scale:
+        print("    Mode: Task Scaling (Freezing all shared params)")
+        for param in model.parameters():
             param.requires_grad = False
+        for name, param in model.named_parameters():
+            if 'task_scale' in name:
+                param.requires_grad = True
+    else:
+        print("    Mode: Current (Freezing non-MLP params)")
+        for name, param in model.named_parameters():
+            if 'mlp' not in name:
+                param.requires_grad = False
             
     optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=1e-3)
     
@@ -152,8 +163,9 @@ def main():
     # 2. Run DoubleOGPT
     do_config = DoubleOGPTConfig()
     do_config.vocab_size = vocab_size
+    do_config.use_task_scale = True
     do_model = DoubleOGPT(do_config).to(device)
-    res_do = run_gauntlet("NanoDoubleO", do_model, math_loader, code_loader, device)
+    res_do = run_gauntlet("NanoDoubleO (Scaled)", do_model, math_loader, code_loader, device)
     
     results = {
         "StandardGPT": res_std,

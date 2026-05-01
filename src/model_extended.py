@@ -143,10 +143,20 @@ class ChebyshevMLP(nn.Module):
         self.c_proj_real = nn.Linear(inner_dim, config.n_embd, bias=False)
         self.c_proj_imag = nn.Linear(inner_dim, config.n_embd, bias=False)
         self.clamp_val = getattr(config, 'clamp_val', 2.0)
+        self.use_task_scale = getattr(config, 'use_task_scale', False)
+        if self.use_task_scale:
+            num_tasks = getattr(config, 'num_tasks', 4)
+            self.task_scale = nn.ParameterList([
+                nn.Parameter(torch.ones(inner_dim)) for _ in range(num_tasks)
+            ])
 
     def forward(self, x, task_idx):
         z_r = self.c_fc_real(x)
         z_i = self.c_fc_imag(x)
+        if self.use_task_scale:
+            s = self.task_scale[task_idx]
+            z_r = z_r * s
+            z_i = z_i * s
         if self.clamp_val > 0:
             z_r = z_r.clamp(-self.clamp_val, self.clamp_val)
             z_i = z_i.clamp(-self.clamp_val, self.clamp_val)
@@ -214,6 +224,8 @@ class DoubleOGPTConfig:
     n_embd: int = 256
     norm_type: str = 'rmsnorm'   # 'rmsnorm' or 'layernorm'
     clamp_val: float = 2.0       # 0.0 = no clamping
+    use_task_scale: bool = False # per-task diagonal scaling
+    num_tasks: int = 4           # number of tasks (for task_scale)
 
 
 class DoubleOGPT(nn.Module):

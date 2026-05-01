@@ -1,0 +1,15 @@
+{
+  "variant": "do_scaled",
+  "seed": 256,
+  "forgetting": {
+    "Math": 0.0011858940124511719,
+    "Code": 0.007344257831573664,
+    "Logic": -0.009730187058448747,
+    "Spell": 0.0
+  },
+  "avg_forgetting": -0.0003000088036059778,
+  "total_time_s": 542.3965964317322,
+  "total_params": 810880,
+  "trainable_params": 4096,
+  "scale_params": 4096
+}
