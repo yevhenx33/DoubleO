@@ -223,7 +223,7 @@ Both datasets use the same 55-token character-level vocabulary (no subword token
 
 ## Results
 
-### Measured Values
+### Experiment 1: Nano-Scale Proof of Concept (2 Tasks, 14K Params)
 
 | Metric | StandardGPT (Baseline) | NanoDoubleO |
 |---|---|---|
@@ -237,25 +237,98 @@ Both datasets use the same 55-token character-level vocabulary (no subword token
 
 The baseline exhibits a forgetting penalty of +0.8485 cross-entropy nats on the math task after 250 steps of code-only training. NanoDoubleO exhibits a forgetting penalty of +0.0295, a **96.5% reduction** relative to the baseline under identical training conditions.
 
-### Visualization
-
 ![NanoDoubleO vs StandardGPT: Continual Learning Trajectory](comparison_chart.png)
 
-The left panel shows cross-entropy loss trajectories across the three evaluation checkpoints. The baseline math loss (red dashed) spikes from 2.87 to 3.72 after code training, while NanoDoubleO math loss (blue solid) remains stable at ~2.59. The right panel shows the forgetting delta as a bar comparison.
+---
+
+### Experiment 2: C-Lite Sweep (8 Arms, Up to 807K Params)
+
+To validate that the nano-scale result was not an artifact of minimal model capacity, we conducted an 8-arm automated sweep across two model sizes, three task counts, and two ablation variants. All arms ran on CPU with 4 parallel workers (2 threads each), completing in 48 minutes.
+
+**Training protocol (per arm):** 2,000 pre-train steps (mixed tasks, all parameters trainable) → freeze non-MLP parameters → 1,500 steps per task sequentially. Eval every 100 steps, 20 eval batches per checkpoint. Learning rate: 3e-4, gradient clipping at 1.0, batch size 16.
+
+#### Size Scaling (4 Tasks: Math → Code → Logic → Spell)
+
+| Arm | Dim | Layers | Params | Math Forget | Code Forget | Logic Forget | **Avg Forget** |
+|---|---|---|---|---|---|---|---|
+| Std 96d | 96 | 3 | 344K | +4.320 | +4.868 | +3.815 | **+3.251** |
+| **DO 96d** | 96 | 3 | 344K | +0.077 | +1.974 | +0.687 | **+0.685** |
+| Std 128d | 128 | 4 | 808K | +5.805 | +6.099 | +4.211 | **+4.029** |
+| **DO 128d** | 128 | 4 | 807K | +0.036 | +0.714 | +0.957 | **+0.427** |
+
+> **Note:** These are single-run values. The multi-seed validation in Experiment 3 revealed that single runs overestimated the reduction by ~2×. See Experiment 3 for the validated effect sizes.
+
+#### Task-Count Sweep (128-dim DoubleO)
+
+| Tasks | Polynomials Used | Avg Forgetting |
+|---|---|---|
+| 2 (Math, Code) | T1, T3 | **+0.042** |
+| 3 (Math, Code, Logic) | T1, T3, T2 | **+0.319** |
+| 4 (Math, Code, Logic, Spell) | T1, T2, T3, T4 | **+0.427** |
+
+Forgetting increases sublinearly with task count. Doubling from 2 to 4 tasks increases forgetting by ~10×, but the absolute magnitude remains an order of magnitude below the baseline (+0.427 vs +4.029 for the equivalent standard model).
+
+#### Ablation Study (128-dim, 4 Tasks)
+
+| Variant | Avg Forgetting | Notes |
+|---|---|---|
+| DO Full (RMSNorm + clamp=2.0) | +0.427 | Default configuration |
+| **DO NoClamp** | **+0.189** | Removing clamping *reduced* forgetting; Math showed negative forgetting (−0.357) |
+| DO LayerNorm | +0.371 | Comparable to RMSNorm; direction-preservation hypothesis not strongly supported |
+
+**Clamping surprise:** The no-clamp variant achieved lower average forgetting (+0.189 vs +0.427), with negative forgetting on Math indicating possible backward transfer. This suggests that clamping at ±2.0 may be overly conservative, restricting the range over which polynomial separation operates. However, a single run without error bars makes this preliminary — the negative forgetting could be noise.
+
+**Norm type:** RMSNorm (+0.427) and LayerNorm (+0.371) produce statistically indistinguishable results at this scale. The theoretical advantage of RMSNorm's direction-preservation is not empirically confirmed.
+
+#### Sweep Visualization
+
+![C-Lite Sweep: 8-Arm Comparison](sweep_results.png)
+
+---
+
+### Experiment 3: Multi-Seed Validation (Definitive Results)
+
+To establish statistically valid effect sizes, we ran the 4 key arms (Standard and DoubleO at both scales) across 5 random seeds each (42, 137, 256, 512, 1024) for a total of 20 independent runs. Each seed controls weight initialization, data shuffle order, and dropout masks.
+
+#### Aggregate Statistics
+
+| Arm | Mean Forgetting | Std Dev | 95% CI | N |
+|---|---|---|---|---|
+| Standard 96d | +3.196 | 0.246 | [+2.980, +3.411] | 5 |
+| **DoubleO 96d** | **+1.451** | 0.158 | [+1.312, +1.589] | 5 |
+| Standard 128d | +4.193 | 0.172 | [+4.043, +4.344] | 5 |
+| **DoubleO 128d** | **+2.113** | 0.340 | [+1.816, +2.411] | 5 |
+
+#### Statistical Significance (Welch's t-test, two-sided)
+
+| Scale | Baseline | DoubleO | Reduction | Cohen's d | p-value | Sig |
+|---|---|---|---|---|---|---|
+| 96-dim (344K) | +3.196 | +1.451 | **54.6%** | 8.45 | 0.000004 | *** |
+| 128-dim (807K) | +4.193 | +2.113 | **49.6%** | 7.73 | 0.000020 | *** |
+
+Both results are highly significant (p < 0.001) with very large effect sizes (Cohen's d > 7). The confidence intervals for baseline and DoubleO do not overlap at either scale. Every DoubleO seed outperforms every baseline seed within the same scale category.
+
+**Corrected effect size:** The single-run sweep (Experiment 2) suggested 79–89% forgetting reduction. Multi-seed validation reveals the true effect is **~50% reduction** — still very large and statistically unambiguous, but the single-run results were optimistic by ~2×.
+
+#### Multi-Seed Visualization
+
+![Multi-Seed Validation (N=5)](multiseed_results.png)
 
 ---
 
 ## Reproducibility
 
-All experiments can be reproduced on a single CPU in under 5 minutes.
+### Experiment 1 (Nano-Scale)
 
-### Prerequisites
+Reproduces on a single CPU in under 5 minutes.
+
+#### Prerequisites
 
 - Python ≥ 3.8
 - PyTorch ≥ 2.0.0
 - Matplotlib ≥ 3.7.0
 
-### Step-by-Step Reproduction
+#### Steps
 
 ```bash
 # 1. Clone and enter the repository
@@ -276,25 +349,63 @@ python scripts/train_and_eval.py
 python scripts/plot_results.py
 ```
 
-**Note on determinism:** The data generation script uses Python's `random` module without a fixed seed, so regenerated datasets will differ across runs. The pre-shipped `math.jsonl`, `code.jsonl`, and `vocab.json` in `data/` correspond to the reported results. The training script also does not fix a PyTorch random seed, so loss values will vary slightly across runs, but the directional result (DoubleO forgetting << baseline forgetting) is consistent.
+### Experiment 2 (C-Lite Sweep)
+
+Reproduces on an 8-core CPU in under 1 hour.
+
+```bash
+# 1. Generate the extended datasets (4 domains × 50K samples)
+python data/data_gen_extended.py
+
+# 2. Run the 8-arm sweep (4 parallel workers × 2 threads)
+python scripts/run_sweep.py
+
+# Results saved to data/sweep/sweep_all.json and data/sweep/sweep_results.png
+```
+
+### Experiment 3 (Multi-Seed Validation)
+
+Reproduces on an 8-core CPU in ~80 minutes. Requires scipy.
+
+```bash
+pip install scipy
+python scripts/run_multiseed.py
+
+# Results saved to data/multiseed/multiseed_summary.json and data/multiseed/multiseed_results.png
+```
+
+### Unit Tests
+
+32 tests covering model shapes, Chebyshev polynomial correctness, gradient isolation, numerical stability, data pipeline integrity, and freeze logic:
+
+```bash
+pip install pytest
+python -m pytest tests/test_extended.py -v
+```
+
+**Note on determinism:** The data generation scripts use `random.seed(42)` for the extended datasets. The multi-seed validation script fixes PyTorch seeds per arm (seeds: 42, 137, 256, 512, 1024) for full reproducibility.
 
 ---
 
 ## Limitations and Caveats
 
-1. **Scale.** This is a 2-layer, 32-dimensional model with ~14K parameters trained on synthetic character-level data. Whether Chebyshev polynomial routing remains effective at transformer scales with billions of parameters and real-world data distributions is untested.
+1. **Scale.** The largest model tested is 128-dimensional with 807K parameters. Whether Chebyshev polynomial routing remains effective at transformer scales with billions of parameters and real-world data distributions is untested. The absolute protection gap widens with scale (1.75 → 2.08), though the percentage reduction narrows slightly (54.6% → 49.6%).
 
-2. **Task count.** Only 2 tasks are evaluated. Chebyshev polynomials $T_n$ are infinite in number, but higher-order polynomials (e.g., $T_7(z) = 64z^7 - 112z^5 + 56z^3 - 7z$) introduce extreme activation magnitudes for $|z| > 1$, which may cause numerical instability or gradient explosion. The practical upper bound on task count is unknown.
+2. **Task count.** Four tasks are evaluated using polynomials T1–T4. Higher-order polynomials (e.g., $T_7(z) = 64z^7 - 112z^5 + 56z^3 - 7z$) introduce extreme activation magnitudes for $|z| > 1$. The ablation suggests clamping may be overly restrictive, but the practical upper bound on task count remains unknown.
 
 3. **Task ID requirement.** The model requires an explicit task identifier at inference time to select the correct polynomial. This limits applicability to scenarios with known task boundaries. Automatic task-ID inference (e.g., via a learned router or entropy-based detection) is not implemented.
 
-4. **Orthogonality gap.** As noted in Step 4b, Chebyshev orthogonality is formally defined for real-valued functions on $[-1, 1]$ under a specific weight function. The complex-valued, unbounded-activation setting used here does not satisfy the conditions of the orthogonality theorem. The observed low forgetting may be partially attributable to the structural separation of linear vs. cubic activation dynamics rather than strict mathematical orthogonality.
+4. **Orthogonality gap.** Chebyshev orthogonality is formally defined for real-valued functions on $[-1, 1]$ under a specific weight function. The complex-valued, unbounded-activation setting used here does not satisfy the conditions of the orthogonality theorem. The observed low forgetting may be partially attributable to structural separation of polynomial activation dynamics rather than strict mathematical orthogonality.
 
-5. **Frozen attention.** Phase 2 freezes all non-MLP parameters (including attention weights). This means the experiment isolates MLP-level forgetting only. Forgetting through attention weight drift is not addressed by this architecture.
+5. **Frozen attention.** All experiments freeze non-MLP parameters during sequential task training. Forgetting through attention weight drift is not addressed by this architecture.
 
-6. **No adversarial evaluation.** The current experiment does not test adversarial scenarios such as deliberately correlated task distributions designed to maximize interference, input sequences that drive activations to boundary conditions of the Chebyshev polynomials, or task-ID manipulation attacks.
+6. **No adversarial evaluation.** The current experiments do not test adversarial scenarios such as deliberately correlated task distributions, boundary-condition inputs, or task-ID manipulation.
 
-7. **MLP expansion factor discrepancy.** The baseline uses a 4× expansion factor (standard GPT convention), while NanoDoubleO uses 2× per rail (real and imaginary). This means the baseline MLP has `32 → 128 → 32` = 8,192 MLP parameters per layer, while NanoDoubleO has `32 → 64 → 32` × 4 matrices = 8,192 MLP parameters per layer. The total parameter counts are comparable but not identical due to the dual-rail structure.
+7. **No SOTA comparison.** The baseline is vanilla sequential fine-tuning. Head-to-head comparison with EWC, Experience Replay, and PackNet is pending.
+
+8. **Synthetic data only.** All four domains (Math, Code, Logic, Spell) are procedurally generated with templated structures. Natural language presents fundamentally different challenges including distributional overlap between tasks and long-range dependencies.
+
+9. **Ablation N=1.** While the core size-scaling result has multi-seed validation, the ablation arms (no-clamp, LayerNorm) and task-count sweep are single-run. Their specific values should be treated as directional, not definitive.
 
 ---
 
@@ -304,19 +415,31 @@ python scripts/plot_results.py
 DoubleO/
 ├── README.md
 ├── requirements.txt
-├── comparison_chart.png          # Generated visualization
+├── comparison_chart.png              # Nano-scale visualization
+├── sweep_results.png                 # C-Lite sweep visualization
+├── multiseed_results.png             # Multi-seed validation visualization
 ├── data/
-│   ├── data_gen.py               # Synthetic dataset generator
-│   ├── math.jsonl                # 20K arithmetic expressions
-│   ├── code.jsonl                # 20K Python function snippets
-│   ├── vocab.json                # Character-level vocabulary (55 tokens)
-│   └── results.json              # Evaluation metrics from last run
+│   ├── data_gen.py                   # Synthetic dataset generator (2 domains)
+│   ├── data_gen_extended.py          # Extended generator (4 domains × 50K)
+│   ├── math.jsonl                    # 20K arithmetic expressions
+│   ├── code.jsonl                    # 20K Python function snippets
+│   ├── vocab.json                    # Character-level vocabulary
+│   ├── results.json                  # Nano-scale eval metrics
+│   ├── extended/                     # Extended datasets (4 domains)
+│   ├── sweep/                        # C-Lite sweep results & logs
+│   └── multiseed/                    # Multi-seed validation results
 ├── scripts/
-│   ├── train_and_eval.py         # 4-phase Continual Learning Gauntlet
-│   └── plot_results.py           # Matplotlib visualization
-└── src/
-    ├── model_baseline.py         # StandardGPT (LayerNorm + GELU MLP)
-    └── model_double_o.py         # NanoDoubleO (RMSNorm + Chebyshev MLP)
+│   ├── train_and_eval.py             # 4-phase Continual Learning Gauntlet
+│   ├── plot_results.py               # Nano-scale visualization
+│   ├── run_extended.py               # Extended single-pair experiment
+│   ├── run_sweep.py                  # 8-arm parallel sweep orchestrator
+│   └── run_multiseed.py              # Multi-seed validation (N=5)
+├── src/
+│   ├── model_baseline.py             # StandardGPT (LayerNorm + GELU MLP)
+│   ├── model_double_o.py             # NanoDoubleO (RMSNorm + Chebyshev MLP)
+│   └── model_extended.py             # Parameterized models for sweep
+└── tests/
+    └── test_extended.py              # 32 unit tests
 ```
 
 ---
@@ -333,3 +456,4 @@ If you reference this work, please cite the repository directly:
   url={https://github.com/yevhenx33/DoubleO}
 }
 ```
+

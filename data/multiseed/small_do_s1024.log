@@ -1,0 +1,17 @@
+[small_do_s1024] START seed=1024 arch=doubleo dim=96 params=343,776
+[small_do_s1024] pretrain 0/2000 losses=['4.110', '4.126', '4.114', '4.221']
+[small_do_s1024] pretrain 200/2000 losses=['2.641', '3.043', '2.556', '2.888']
+[small_do_s1024] pretrain 400/2000 losses=['2.601', '3.034', '2.479', '2.817']
+[small_do_s1024] pretrain 600/2000 losses=['2.583', '2.999', '1.905', '2.662']
+[small_do_s1024] pretrain 800/2000 losses=['2.570', '2.789', '1.303', '2.312']
+[small_do_s1024] pretrain 1000/2000 losses=['2.443', '2.576', '0.950', '2.145']
+[small_do_s1024] pretrain 1200/2000 losses=['2.259', '2.404', '0.772', '2.030']
+[small_do_s1024] pretrain 1400/2000 losses=['2.200', '2.155', '0.686', '1.889']
+[small_do_s1024] pretrain 1600/2000 losses=['2.142', '2.054', '0.633', '1.753']
+[small_do_s1024] pretrain 1800/2000 losses=['2.060', '1.863', '0.570', '1.626']
+[small_do_s1024] pretrain DONE 150s
+[small_do_s1024] Math DONE losses=['1.6812', '2.1592', '2.2135', '1.9290']
+[small_do_s1024] Code DONE losses=['2.1516', '0.8033', '2.5925', '2.7124']
+[small_do_s1024] Logic DONE losses=['2.3373', '1.8221', '0.3813', '3.2043']
+[small_do_s1024] Spell DONE losses=['2.4012', '6.0458', '0.5380', '1.2444']
+[small_do_s1024] FINISHED 480s avg_forget=+1.5298 per_task={'Math': 0.7199746668338778, 'Code': 5.242444634437561, 'Logic': 0.15667327493429184, 'Spell': 0.0}
