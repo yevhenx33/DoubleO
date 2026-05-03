@@ -1,7 +1,7 @@
-# Handover: ChebyWave v6 (Multi-Digit Arithmetic)
+# Handover: DoubleO v6 (Multi-Digit Arithmetic)
 
 ## The Current State of the Art
-The repository has been pruned to its core essentials. You are starting with the **ChebyWave v6 Auto-Routed Architecture**. This model uses $O(N)$ polynomial recurrence to completely bypass Multi-Head Attention, utilizing a singular recursive "Resonant Cavity" to achieve deep mathematical reasoning with only ~200,000 parameters.
+The repository has been pruned to its core essentials. You are starting with the **DoubleO v6 Auto-Routed Architecture**. This model uses $O(N)$ polynomial recurrence to completely bypass Multi-Head Attention, utilizing a singular recursive "Resonant Cavity" to achieve deep mathematical reasoning with only ~200,000 parameters.
 
 ### Core Files
 * `scripts/modal_chebywave_multidigit.py`: The main V6 execution and training pipeline. Contains the dataloaders, the Resonant Cavity definition, and the Modal deployment logic.

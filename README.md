@@ -1,12 +1,12 @@
-# ChebyWave v6: Continuous Mathematical Grokking
+# DoubleO v6: Continuous Mathematical Grokking
 
-This repository contains the architecture and experimental pipeline for **ChebyWave v6**, a sub-0.1ms deterministic polynomial recurrence engine designed to achieve multi-digit arithmetic grokking with zero catastrophic forgetting.
+This repository contains the architecture and experimental pipeline for **DoubleO v6**, a sub-0.1ms deterministic polynomial recurrence engine designed to achieve multi-digit arithmetic grokking with zero catastrophic forgetting.
 
 ## The Architecture Breakthrough
 
 Traditional Large Language Models (LLMs) rely on $O(N^2)$ Self-Attention and deep, multi-layer feed-forward networks to "think." They also suffer from catastrophic interference (forgetting) when trained on sequential tasks because all tasks overwrite the same dense weight matrices.
 
-**ChebyWave v6 entirely abandons Attention and Layer Stacking.**
+**DoubleO v6 entirely abandons Attention and Layer Stacking.**
 
 ### 1. The Chebyshev Linear Scan
 Instead of Attention, we use a custom, highly-optimized Triton kernel (`cheby_triton.py`) that executes a deterministic, $O(N)$ linear recurrence defined by the roots of Chebyshev polynomials. 
@@ -15,13 +15,13 @@ Instead of Attention, we use a custom, highly-optimized Triton kernel (`cheby_tr
 - Because it is a pure causal scan, it requires **no positional embeddings** and consumes **zero KV-cache memory**.
 
 ### 2. The Resonant Cavity
-Instead of stacking 24 distinct neural network layers (which bloats parameters into the billions), ChebyWave uses a singular, highly efficient MLP block called the **Resonant Cavity**.
+Instead of stacking 24 distinct neural network layers (which bloats parameters into the billions), DoubleO uses a singular, highly efficient MLP block called the **Resonant Cavity**.
 - The token state is passed into the cavity and loops recursively (`max_iterations = 24`).
 - It acts as a dynamical system, bouncing the logic until it converges on an attractor state. 
 - We achieve the deep reasoning depth of a 24-layer Transformer using the physical parameter footprint of a 1-layer model (~220,000 parameters).
 
 ### 3. The Auto-Router (Zero-Forgetting)
-To solve catastrophic forgetting, ChebyWave utilizes a dynamic task router. By scaling the inputs mathematically, the model shifts different logical operations (e.g., Addition vs. Subtraction) into completely orthogonal polynomial frequency bands ($T_2(x)$, $T_3(x)$). 
+To solve catastrophic forgetting, DoubleO utilizes a dynamic task router. By scaling the inputs mathematically, the model shifts different logical operations (e.g., Addition vs. Subtraction) into completely orthogonal polynomial frequency bands ($T_2(x)$, $T_3(x)$). 
 - Tasks share the foundational base-10 embedding logic but operate in isolated mathematical dimensions.
 - **Result:** Training the model on Subtraction *after* it perfectly memorized Addition resulted in a **+9.0% Retention Delta** (Positive Transfer), completely eliminating catastrophic forgetting.
 
