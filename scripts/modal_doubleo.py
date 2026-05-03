@@ -40,7 +40,7 @@ class TemporalRouter(nn.Module):
         w = torch.softmax(logits, dim=-1)
         return w
 
-class MoEBlock(nn.Module):
+class DoubleOBlock(nn.Module):
     def __init__(self, dim, expansion, iterations):
         super().__init__()
         self.iterations = iterations
@@ -92,7 +92,7 @@ class MoEBlock(nn.Module):
             
         return h1_out, h2_out
 
-class ChebyMoE(nn.Module):
+class DoubleO(nn.Module):
     def __init__(self, vocab_size, config):
         super().__init__()
         dim = 128
@@ -106,7 +106,7 @@ class ChebyMoE(nn.Module):
         self.token_emb_2 = nn.Embedding(vocab_size, dim)
         
         self.blocks = nn.ModuleList([
-            MoEBlock(dim=dim, expansion=config["expansion"], iterations=config["iterations"])
+            DoubleOBlock(dim=dim, expansion=config["expansion"], iterations=config["iterations"])
             for _ in range(config["num_layers"])
         ])
         
@@ -206,10 +206,10 @@ def run_model_eval():
         return x.cuda(), y.cuda()
 
     config = {"num_layers": 6, "expansion": 4, "iterations": 4}
-    model = ChebyMoE(vocab_size=vocab_size, config=config).cuda()
+    model = DoubleO(vocab_size=vocab_size, config=config).cuda()
         
     params = sum(p.numel() for p in model.parameters())
-    print(f"[ChebyMoE] Initialized. Vocab: {vocab_size}, Params: {params}")
+    print(f"[DoubleO] Initialized. Vocab: {vocab_size}, Params: {params}")
     
     import torch._dynamo
     torch._dynamo.config.suppress_errors = True
@@ -241,7 +241,7 @@ def run_model_eval():
         current_task = 'A' if step < STEPS_PHASE_1 else 'B'
         
         if step == STEPS_PHASE_1:
-            print("\n[ChebyMoE] Phase 1 Complete. Computing FIM exclusively on CEO (Router)...")
+            print("\n[DoubleO] Phase 1 Complete. Computing FIM exclusively on CEO (Router)...")
             fisher_dict, optimal_weights = compute_ceo_fisher(model, train_A, device=torch.device("cuda"))
             
             frozen_count = 0
@@ -251,7 +251,7 @@ def run_model_eval():
                     frozen_count += param.numel()
                 if "_2" in name:
                     param.requires_grad = True # Unfreeze Expert 2
-            print(f"[ChebyMoE] Frozen Expert 1 ({frozen_count} params). Phase 2 starting.\n")
+            print(f"[DoubleO] Frozen Expert 1 ({frozen_count} params). Phase 2 starting.\n")
         
         x, y = get_batch('train', task=current_task)
         logits, ce_loss, w = model(x, y)
@@ -294,20 +294,20 @@ def run_model_eval():
                     vloss_B_val = vloss_B.item()
                     
             if step < STEPS_PHASE_1:
-                print(f"[ChebyMoE] P1 (Shakespeare) Step {step:4d} | CE: {ce_loss.item():.4f} | Val A: {vloss_A.item():.4f} | Router w1={w_mean[0].item():.2f}")
+                print(f"[DoubleO] P1 (Shakespeare) Step {step:4d} | CE: {ce_loss.item():.4f} | Val A: {vloss_A.item():.4f} | Router w1={w_mean[0].item():.2f}")
             else:
                 ewc_val = ewc_penalty.item() if isinstance(ewc_penalty, torch.Tensor) else 0.0
-                print(f"[ChebyMoE] P2 (Math) Step {step:4d} | CE: {ce_loss.item():.4f} | EWC: {ewc_val:.2f} | Val A: {vloss_A.item():.4f} | Val B: {vloss_B_val:.4f} | Router w2={w_mean[1].item():.2f}")
+                print(f"[DoubleO] P2 (Math) Step {step:4d} | CE: {ce_loss.item():.4f} | EWC: {ewc_val:.2f} | Val A: {vloss_A.item():.4f} | Val B: {vloss_B_val:.4f} | Router w2={w_mean[1].item():.2f}")
             
     return {
-        "name": "cheby_moe",
+        "name": "doubleo",
         "params": params,
         "metrics": metrics
     }
 
 @app.local_entrypoint()
 def main():
-    print("Launching Chebyshev MoE Continual Learning Gauntlet on Modal...")
+    print("Launching DoubleO Continual Learning Gauntlet on Modal...")
     res = run_model_eval.remote()
     
     final_dict = {res["name"]: res}
