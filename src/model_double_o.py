@@ -47,11 +47,49 @@ class ChebyshevMLP(nn.Module):
         self.c_proj_real = nn.Linear(config.n_embd * 2, config.n_embd, bias=False)
         self.c_proj_imag = nn.Linear(config.n_embd * 2, config.n_embd, bias=False)
         self.use_task_scale = getattr(config, 'use_task_scale', False)
+        self.use_task_lora = getattr(config, 'use_task_lora', False)
+        num_tasks = getattr(config, 'num_tasks', 2)
+        inner_dim = config.n_embd * 2
+        
+        self.inner_norm_real = nn.Tanh()
+        self.inner_norm_imag = nn.Tanh()
+        
         if self.use_task_scale:
-            num_tasks = getattr(config, 'num_tasks', 2)
             self.task_scale = nn.ParameterList([
-                nn.Parameter(torch.ones(config.n_embd * 2)) for _ in range(num_tasks)
+                nn.Parameter(torch.ones(inner_dim)) for _ in range(num_tasks)
             ])
+            
+        if self.use_task_lora:
+            import math
+            self.lora_rank = getattr(config, 'lora_rank', 8)
+            self.lora_alpha = getattr(config, 'lora_alpha', 16.0)
+            
+            # A projects from n_embd to lora_rank, B projects from lora_rank to inner_dim
+            self.lora_A_real = nn.ParameterList([nn.Parameter(torch.empty(config.n_embd, self.lora_rank)) for _ in range(num_tasks)])
+            self.lora_B_real = nn.ParameterList([nn.Parameter(torch.empty(self.lora_rank, inner_dim)) for _ in range(num_tasks)])
+            self.lora_A_imag = nn.ParameterList([nn.Parameter(torch.empty(config.n_embd, self.lora_rank)) for _ in range(num_tasks)])
+            self.lora_B_imag = nn.ParameterList([nn.Parameter(torch.empty(self.lora_rank, inner_dim)) for _ in range(num_tasks)])
+            
+            # Output adapters (applied after polynomial)
+            # p_r/p_i are of size inner_dim, mapping back to n_embd
+            self.lora_C_real = nn.ParameterList([nn.Parameter(torch.empty(inner_dim, self.lora_rank)) for _ in range(num_tasks)])
+            self.lora_D_real = nn.ParameterList([nn.Parameter(torch.empty(self.lora_rank, config.n_embd)) for _ in range(num_tasks)])
+            self.lora_C_imag = nn.ParameterList([nn.Parameter(torch.empty(inner_dim, self.lora_rank)) for _ in range(num_tasks)])
+            self.lora_D_imag = nn.ParameterList([nn.Parameter(torch.empty(self.lora_rank, config.n_embd)) for _ in range(num_tasks)])
+            
+            self.task_bias_real = nn.ParameterList([nn.Parameter(torch.zeros(inner_dim)) for _ in range(num_tasks)])
+            self.task_bias_imag = nn.ParameterList([nn.Parameter(torch.zeros(inner_dim)) for _ in range(num_tasks)])
+            
+            for i in range(num_tasks):
+                nn.init.kaiming_uniform_(self.lora_A_real[i], a=math.sqrt(5))
+                nn.init.zeros_(self.lora_B_real[i])
+                nn.init.kaiming_uniform_(self.lora_A_imag[i], a=math.sqrt(5))
+                nn.init.zeros_(self.lora_B_imag[i])
+                
+                nn.init.kaiming_uniform_(self.lora_C_real[i], a=math.sqrt(5))
+                nn.init.zeros_(self.lora_D_real[i])
+                nn.init.kaiming_uniform_(self.lora_C_imag[i], a=math.sqrt(5))
+                nn.init.zeros_(self.lora_D_imag[i])
         
     def forward(self, x, task_idx):
         z_real = self.c_fc_real(x)
@@ -61,17 +99,44 @@ class ChebyshevMLP(nn.Module):
             s = self.task_scale[task_idx]
             z_real = z_real * s
             z_imag = z_imag * s
+            
+        if self.use_task_lora:
+            lora_r = (x @ self.lora_A_real[task_idx]) @ self.lora_B_real[task_idx]
+            lora_i = (x @ self.lora_A_imag[task_idx]) @ self.lora_B_imag[task_idx]
+            
+            scaling = self.lora_alpha / self.lora_rank
+            z_real = z_real + (lora_r * scaling) + self.task_bias_real[task_idx]
+            z_imag = z_imag + (lora_i * scaling) + self.task_bias_imag[task_idx]
+            
+        z_real = self.inner_norm_real(z_real)
+        z_imag = self.inner_norm_imag(z_imag)
         
         if task_idx == 0:
-            # Task A: T1 (Linear)
-            p_r = z_real
-            p_i = z_imag
+            # Task A: T2
+            p_r = 2 * (z_real**2 - z_imag**2) - 1
+            p_i = 4 * z_real * z_imag
+            # Task A reads Real projection
+            out = self.c_proj_real(p_r) - self.c_proj_imag(p_i)
         else:
-            # Task B: T3 (Cubic)
+            # Task B: T3
             p_r = 4 * (z_real**3 - 3 * z_real * z_imag**2) - 3 * z_real
             p_i = 4 * (3 * z_real**2 * z_imag - z_imag**3) - 3 * z_imag
+            # Task B reads Imaginary projection
+            out = self.c_proj_imag(p_r) + self.c_proj_real(p_i)
             
-        return self.c_proj_real(p_r) + self.c_proj_imag(p_i)
+        if self.use_task_lora:
+            scaling = self.lora_alpha / self.lora_rank
+            out_lora_r_pr = (p_r @ self.lora_C_real[task_idx]) @ self.lora_D_real[task_idx]
+            out_lora_i_pi = (p_i @ self.lora_C_imag[task_idx]) @ self.lora_D_imag[task_idx]
+            out_lora_r_pi = (p_i @ self.lora_C_real[task_idx]) @ self.lora_D_real[task_idx]
+            out_lora_i_pr = (p_r @ self.lora_C_imag[task_idx]) @ self.lora_D_imag[task_idx]
+            
+            if task_idx == 0:
+                out = out + (out_lora_r_pr - out_lora_i_pi) * scaling
+            else:
+                out = out + (out_lora_i_pr + out_lora_r_pi) * scaling
+            
+        return out
 
 class Block(nn.Module):
     def __init__(self, config):
@@ -93,6 +158,9 @@ class DoubleOGPTConfig:
     n_head: int = 2
     n_embd: int = 32
     use_task_scale: bool = False
+    use_task_lora: bool = False
+    lora_rank: int = 32
+    lora_alpha: float = 32.0
     num_tasks: int = 2
 
 class DoubleOGPT(nn.Module):

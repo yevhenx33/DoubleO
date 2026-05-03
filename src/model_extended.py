@@ -142,24 +142,59 @@ class ChebyshevMLP(nn.Module):
         self.c_fc_imag = nn.Linear(config.n_embd, inner_dim, bias=False)
         self.c_proj_real = nn.Linear(inner_dim, config.n_embd, bias=False)
         self.c_proj_imag = nn.Linear(inner_dim, config.n_embd, bias=False)
-        self.clamp_val = getattr(config, 'clamp_val', 2.0)
         self.use_task_scale = getattr(config, 'use_task_scale', False)
+        self.use_task_lora = getattr(config, 'use_task_lora', False)
+        
+        num_tasks = getattr(config, 'num_tasks', 4)
+        
+        self.inner_norm_real = RMSNorm(inner_dim)
+        self.inner_norm_imag = RMSNorm(inner_dim)
         if self.use_task_scale:
-            num_tasks = getattr(config, 'num_tasks', 4)
             self.task_scale = nn.ParameterList([
                 nn.Parameter(torch.ones(inner_dim)) for _ in range(num_tasks)
             ])
+            
+        if self.use_task_lora:
+            self.lora_rank = getattr(config, 'lora_rank', 8)
+            self.lora_alpha = getattr(config, 'lora_alpha', 16.0)
+            
+            # We need separate adapters for real and imaginary pathways
+            self.lora_A_real = nn.ParameterList([nn.Parameter(torch.empty(config.n_embd, self.lora_rank)) for _ in range(num_tasks)])
+            self.lora_B_real = nn.ParameterList([nn.Parameter(torch.empty(self.lora_rank, inner_dim)) for _ in range(num_tasks)])
+            self.lora_A_imag = nn.ParameterList([nn.Parameter(torch.empty(config.n_embd, self.lora_rank)) for _ in range(num_tasks)])
+            self.lora_B_imag = nn.ParameterList([nn.Parameter(torch.empty(self.lora_rank, inner_dim)) for _ in range(num_tasks)])
+            
+            self.task_bias_real = nn.ParameterList([nn.Parameter(torch.zeros(inner_dim)) for _ in range(num_tasks)])
+            self.task_bias_imag = nn.ParameterList([nn.Parameter(torch.zeros(inner_dim)) for _ in range(num_tasks)])
+            
+            # Initialize: A with Kaiming uniform (like linear layer weights), B with zeros
+            for i in range(num_tasks):
+                nn.init.kaiming_uniform_(self.lora_A_real[i], a=math.sqrt(5))
+                nn.init.zeros_(self.lora_B_real[i])
+                nn.init.kaiming_uniform_(self.lora_A_imag[i], a=math.sqrt(5))
+                nn.init.zeros_(self.lora_B_imag[i])
 
     def forward(self, x, task_idx):
         z_r = self.c_fc_real(x)
         z_i = self.c_fc_imag(x)
+        
         if self.use_task_scale:
             s = self.task_scale[task_idx]
             z_r = z_r * s
             z_i = z_i * s
-        if self.clamp_val > 0:
-            z_r = z_r.clamp(-self.clamp_val, self.clamp_val)
-            z_i = z_i.clamp(-self.clamp_val, self.clamp_val)
+            
+        if self.use_task_lora:
+            # Apply feature-space LoRA directly from x
+            lora_r = (x @ self.lora_A_real[task_idx]) @ self.lora_B_real[task_idx]
+            lora_i = (x @ self.lora_A_imag[task_idx]) @ self.lora_B_imag[task_idx]
+            
+            scaling = self.lora_alpha / self.lora_rank
+            z_r = z_r + (lora_r * scaling) + self.task_bias_real[task_idx]
+            z_i = z_i + (lora_i * scaling) + self.task_bias_imag[task_idx]
+            
+            
+        z_r = self.inner_norm_real(z_r)
+        z_i = self.inner_norm_imag(z_i)
 
         if task_idx == 0:
             # T1(z) = z
@@ -225,7 +260,10 @@ class DoubleOGPTConfig:
     norm_type: str = 'rmsnorm'   # 'rmsnorm' or 'layernorm'
     clamp_val: float = 2.0       # 0.0 = no clamping
     use_task_scale: bool = False # per-task diagonal scaling
-    num_tasks: int = 4           # number of tasks (for task_scale)
+    use_task_lora: bool = False  # per-task low-rank adaptation
+    lora_rank: int = 8
+    lora_alpha: float = 32.0
+    num_tasks: int = 4           # number of tasks (for task_scale/lora)
 
 
 class DoubleOGPT(nn.Module):

@@ -1,0 +1,90 @@
+\begin{figure}[htbp]
+    \centering
+    \resizebox{\columnwidth}{!}{%
+        \begin{tikzpicture}[
+            font=\normalsize\sffamily,
+            >=Stealth,
+            every node/.style={align=center}
+        ]
+        
+        % Constants for proportional widths
+        \def\stepw{5}      % Width of one compute step
+        \def\qwait{1.5}    % Width of Quorum Wait
+        \def\gwait{4}      % Width of Grace Window (sum > \stepw)
+        \def\sync{3.5}     % Width of Syncing
+        
+        % Calculate cumulative widths
+        \pgfmathsetmacro{\gw}{\qwait+\gwait}
+        \pgfmathsetmacro{\sw}{\gw+\sync}
+        \pgfmathsetmacro{\endI}{2*\stepw}
+        
+        \pgfmathsetmacro{\qwII}{\stepw+\qwait}
+        \pgfmathsetmacro{\gwII}{\stepw+\gw}
+        \pgfmathsetmacro{\swII}{\stepw+\sw}
+        \pgfmathsetmacro{\endII}{3*\stepw}
+
+        \pgfmathsetmacro{\qwIII}{2*\stepw+\qwait}
+        \pgfmathsetmacro{\gwIII}{2*\stepw+\gw}
+        
+        % Vertical placement of rows
+        \def\ycomp{2.5}    % Learners' compute steps
+        \def\yfI{0.8}      % Fragment 1
+        \def\yfII{-0.8}    % Fragment 2
+        \def\yfIII{-2.4}   % Fragment 3
+        
+        % --- Row: Learner Compute Steps ---
+        \draw[thick, |-|] (0, \ycomp) -- (\stepw, \ycomp) node[midway, above=4pt] {\large\textbf{Step $T=0$} \\ \LARGE $\xi_{\text{step}}$};
+        \draw[thick, -|] (\stepw, \ycomp) -- (2*\stepw, \ycomp) node[midway, above=4pt] {\large\textbf{Step $T=1$} \\ \LARGE $\xi_{\text{step}}$};
+        \draw[thick, -|] (2*\stepw, \ycomp) -- (3*\stepw, \ycomp) node[midway, above=4pt] {\large\textbf{Step $T=2$} \\ \LARGE $\xi_{\text{step}}$};
+        
+        % Vertical Step Boundaries (Dotted guides)
+        \draw[dotted, gray, thick] (0, \ycomp+0.8) -- (0, -3.5);
+        \draw[dotted, gray, thick] (\stepw, \ycomp+0.8) -- (\stepw, -3.5);
+        \draw[dotted, gray, thick] (2*\stepw, \ycomp+0.8) -- (2*\stepw, -3.5);
+        \draw[dotted, gray, thick] (3*\stepw, \ycomp+0.8) -- (3*\stepw, -3.5);
+        
+        % --- Row: Fragment 1 ---
+        \draw[thick, |-|] (0, \yfI) -- (\qwait, \yfI) node[midway, above=2pt] {\LARGE $\xi_{\text{quorum}}$};
+        \node[below=2pt, font=\normalsize, fill=white, inner sep=1pt] at (\qwait, \yfI) {$K$ ready};
+        
+        \draw[thick, -|] (\qwait, \yfI) -- (\gw, \yfI) node[midway, above=2pt] {\LARGE $\xi_{\text{grace}}$};
+        \node[below=2pt, font=\normalsize, fill=white, inner sep=1pt] at (\gw, \yfI) {$+K_\Delta$ ready};
+        
+        \draw[thick, -|] (\gw, \yfI) -- (\sw, \yfI) node[midway, above=2pt] {\LARGE $\xi_{\text{sync}}$};
+        \draw[thick, dashed, -|] (\sw, \yfI) -- (\endI, \yfI) node[midway, above=2pt, text=gray] {\large Slack};
+        
+        % Receive Arrow for Frag 1
+        \draw[->, thick, blue!80!black, dashed] (\endI, \yfI) -- (\endI, \ycomp-0.1) node[midway, right=2pt, align=left, font=\small] {Frag 1 \\ Received};
+        
+        % --- Row: Fragment 2 ---
+        \draw[thick, |-|] (\stepw, \yfII) -- (\qwII, \yfII) node[midway, above=2pt] {\LARGE $\xi_{\text{quorum}}$};
+        \node[below=2pt, font=\normalsize, fill=white, inner sep=1pt] at (\qwII, \yfII) {$K$ ready};
+        
+        \draw[thick, -|] (\qwII, \yfII) -- (\gwII, \yfII) node[midway, above=2pt] {\LARGE $\xi_{\text{grace}}$};
+        \node[below=2pt, font=\normalsize, fill=white, inner sep=1pt] at (\gwII, \yfII) {$+K_\Delta$ ready};
+        
+        \draw[thick, -|] (\gwII, \yfII) -- (\swII, \yfII) node[midway, above=2pt] {\LARGE $\xi_{\text{sync}}$};
+        \draw[thick, dashed, -|] (\swII, \yfII) -- (\endII, \yfII) node[midway, above=2pt, text=gray] {\large Slack};
+        
+        % Receive Arrow for Frag 2
+        \draw[->, thick, blue!80!black, dashed] (\endII, \yfII) -- (\endII, \ycomp-0.1) node[midway, right=2pt, align=left, font=\small] {Frag 2 \\ Received};
+        
+        % --- Row: Fragment 3 ---
+        \draw[thick, |-|] (2*\stepw, \yfIII) -- (\qwIII, \yfIII) node[midway, above=2pt] {\LARGE $\xi_{\text{quorum}}$};
+        \node[below=2pt, font=\normalsize, fill=white, inner sep=1pt] at (\qwIII, \yfIII) {$K$ ready};
+        
+        \draw[thick, -|] (\qwIII, \yfIII) -- (\gwIII, \yfIII) node[midway, above=2pt] {\LARGE $\xi_{\text{grace}}$};
+        \node[below=2pt, font=\normalsize, fill=white, inner sep=1pt] at (\gwIII, \yfIII) {$+K_\Delta$ ready};
+        \draw[thick, dashed, -] (\gwIII, \yfIII) -- (\gwIII+1.5, \yfIII);
+        
+        % --- Row Labels (Left side) ---
+        \node[anchor=east, font=\large\bfseries] at (-0.5, \ycomp) {Learners};
+        \node[anchor=east, font=\large\bfseries] at (-0.5, \yfI) {Syncer (Frag 1)};
+        \node[anchor=east, font=\large\bfseries] at (-0.5, \yfII) {Syncer (Frag 2)};
+        \node[anchor=east, font=\large\bfseries] at (-0.5, \yfIII) {Syncer (Frag 3)};
+        
+        \end{tikzpicture}%
+    }
+    \caption{Illustration of the adaptive quorum grace window fitting within the available slack.}
+    \label{fig:grace_window}
+\end{figure}
