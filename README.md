@@ -29,6 +29,8 @@ To solve catastrophic forgetting, DoubleO utilizes a dynamic task router. By sca
 
 The training pipeline (`modal_chebywave_multidigit.py`) forces the tiny parameter space to discover the generalized base-10 carry algorithm.
 
+![DoubleO v6 Extreme Grokking Results](v6_grokking_chart.png)
+
 ### Key Discoveries
 1. **Algorithmic Alignment:** Formatting the target sequences backward (e.g., `92 + 23 = 511`) natively aligns the autoregressive token generation with the human carry algorithm (ones-place first), accelerating grokking by allowing causal gradient flow without lookahead requirements.
 2. **Weight Decay Balance:** A strict `weight_decay = 0.1` is enforced to aggressively shear away brittle, high-norm memorization circuits without collapsing the logits to uniform randomness (which occurs at `1.0` decay).
