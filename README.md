@@ -130,17 +130,17 @@ The Cayley Transform mathematically *crushed* the overfitting entirely. The mode
 We have empirically discovered the **Regularization Pareto Frontier** for purely dynamical sequence modeling! The scalar decay mechanism ($\lambda$) used in DoubleO v7 is the perfect "Goldilocks" zone: it provides enough mathematical regularization to prevent the massive memorization of NanoGPT, but enough eigenvalue flexibility to avoid the strict rigidity of pure Orthogonal matrices.
 
 ### The Continual Learning Gauntlet (Catastrophic Forgetting)
-To test the "Zero-Forgetting" hypothesis of the Resonant Cavity architecture, we subjected the champion **Massive Pure** model and the **NanoGPT** baseline to a strict Continual Learning Gauntlet:
+To test the "Zero-Forgetting" hypothesis of the Resonant Cavity architecture, we subjected the champion **Massive Pure** model, the **NanoGPT** baseline, and a dynamic **Poly-MoE (Polynomial Mixture of Experts)** to a strict Continual Learning Gauntlet:
 - **Phase 1 (Steps 0 - 2,000)**: Train strictly on Task A (`tinyshakespeare.txt`).
 - **Phase 2 (Steps 2,001 - 4,000)**: Instantly swap to Task B (`math.jsonl`). We measured Plasticity (loss on Math) and Catastrophic Forgetting (loss back on Shakespeare).
 
 ![Continual Learning Chart](continual_learning_chart.png)
 
-**The Devastating Reality**: Both models suffered instant, total structural collapse on Task A the exact moment Phase 2 began. NanoGPT's Shakespeare loss spiked to `~10`. 
+**The Devastating Reality**: All models suffered instant, total structural collapse on Task A the exact moment Phase 2 began. NanoGPT's Shakespeare loss spiked to `~10`, and Massive Pure spiked to `~11`. 
 
-Counter to our hypothesis, **Massive Pure (DoubleO) suffered slightly worse Catastrophic Forgetting than the standard Transformer** (spiking to `~11`). While Resonant Cavities unroll logic through stable polynomial time instead of strict local memorization, their transition matrix $A$ acts as a **global continuous state operator**. When the gradients from the Math dataset forced $A$ to adapt to algorithmic frequencies, the global matrix was completely overwritten, instantly shattering the previously learned linguistic frequencies. 
+Even the **Poly-MoE** architecture—designed to dynamically route new sequences into separate, isolated polynomial waveforms—failed to shield the old task! While Poly-MoE maintained separate $A$ matrices, the MoE Router ($W_{router}$) was NOT shielded. When Phase 2 began, the massive gradients required to map the new Math tokens (numbers/operators) into the experts scrambled the entire Router. Without explicit task-freezing or EWC loss terms, the optimizer aggressively hijacked *all* experts and scrambled the old vocabulary mappings just to minimize the immediate Math loss.
 
-Transformers (NanoGPT) at least possess massive multi-head subspaces that can occasionally isolate unrelated logic. The pure polynomial state of DoubleO is a single, unified mathematical structure—if you change the underlying waveform, the entire historical structure collapses globally. Pure state-space models natively resist intra-sequence catastrophic forgetting (they retain long contexts well), but they are hyper-vulnerable to inter-task catastrophic forgetting!
+We have proven a profound property of these architectures: **Pure state-space models natively resist intra-sequence catastrophic forgetting (they retain long contexts beautifully), but they are hyper-vulnerable to inter-task catastrophic forgetting!** The bottleneck isn't just the continuous state matrix $A$, but the routing and embedding mapping that translates discrete tokens into the continuous state.
 
 ## Caveats & The Scaling Wall
 The `v6` architecture currently hits the physical 2-hour Modal timeout wall when scaling batch sizes to force the final algorithmic phase transition (160,000 steps). Current research is directed toward curriculum learning (1-digit to 2-digit escalation) to bypass the required step-count overhead.
