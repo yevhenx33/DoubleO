@@ -10,20 +10,26 @@ with open('data/poly_moe_results.json', 'r') as f:
 with open('data/ewc_continual_results.json', 'r') as f:
     results_ewc = json.load(f)
 
+with open('data/cheby_moe_results.json', 'r') as f:
+    results_cheby = json.load(f)
+
 nano = results["nanogpt"]["metrics"]
 massive = results["massive_pure"]["metrics"]
 poly = results_poly["poly_moe"]["metrics"]
 ewc = results_ewc["ewc_pure"]["metrics"]
+cheby = results_cheby["cheby_moe"]["metrics"]
 
 nano_val_A = [x[1] for x in nano["val_A"]]
 massive_val_A = [x[1] for x in massive["val_A"]]
 poly_val_A = [x[1] for x in poly["val_A"]]
 ewc_val_A = [x[1] for x in ewc["val_A"]]
+cheby_val_A = [x[1] for x in cheby["val_A"]]
 
 nano_val_B = [x[1] for x in nano["val_B"]]
 massive_val_B = [x[1] for x in massive["val_B"]]
 poly_val_B = [x[1] for x in poly["val_B"]]
 ewc_val_B = [x[1] for x in ewc["val_B"]]
+cheby_val_B = [x[1] for x in cheby["val_B"]]
 
 steps_A = [x[0] for x in nano["val_A"]]
 steps_B = [x[0] for x in nano["val_B"]]
@@ -43,10 +49,11 @@ plt.rcParams.update({
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
 
 # Plot 1: Task A (Catastrophic Forgetting)
-ax1.plot(steps_A, nano_val_A, color="#f85149", linewidth=2.5, alpha=0.9, label="NanoGPT")
-ax1.plot(steps_A, massive_val_A, color="#2ea043", linewidth=2.5, alpha=0.9, label="Massive Pure")
-ax1.plot(steps_A, poly_val_A, color="#58a6ff", linewidth=2.5, alpha=0.9, linestyle="--", label="Poly-MoE")
-ax1.plot(steps_A, ewc_val_A, color="#d2a8ff", linewidth=2.5, alpha=0.9, linestyle=":", label="EWC + Prototype")
+ax1.plot(steps_A, nano_val_A, color="#f85149", linewidth=2.5, alpha=0.6, label="NanoGPT")
+ax1.plot(steps_A, massive_val_A, color="#2ea043", linewidth=2.5, alpha=0.6, label="Massive Pure")
+ax1.plot(steps_A, poly_val_A, color="#58a6ff", linewidth=2.5, alpha=0.6, linestyle="--", label="Poly-MoE")
+ax1.plot(steps_A, ewc_val_A, color="#d2a8ff", linewidth=2.5, alpha=0.6, linestyle=":", label="EWC + Prototype")
+ax1.plot(steps_A, cheby_val_A, color="#ff7b72", linewidth=3.5, alpha=1.0, label="Chebyshev MoE (CEO & Engineers)")
 
 ax1.axvline(x=2000, color="#8b949e", linestyle="--", alpha=0.5, label="Phase 2 Start")
 ax1.set_title("Catastrophic Forgetting (Validation Loss A)", pad=20, fontsize=14, fontweight="bold", color="#ffffff")
@@ -57,10 +64,11 @@ ax1.grid(True, linestyle="--", alpha=0.5)
 ax1.legend(frameon=True, facecolor="#0d1117", edgecolor="#30363d")
 
 # Plot 2: Task B (Plasticity)
-ax2.plot(steps_B, nano_val_B, color="#f85149", linewidth=2.5, alpha=0.9, label="NanoGPT")
-ax2.plot(steps_B, massive_val_B, color="#2ea043", linewidth=2.5, alpha=0.9, label="Massive Pure")
-ax2.plot(steps_B, poly_val_B, color="#58a6ff", linewidth=2.5, alpha=0.9, linestyle="--", label="Poly-MoE")
-ax2.plot(steps_B, ewc_val_B, color="#d2a8ff", linewidth=2.5, alpha=0.9, linestyle=":", label="EWC + Prototype")
+ax2.plot(steps_B, nano_val_B, color="#f85149", linewidth=2.5, alpha=0.6, label="NanoGPT")
+ax2.plot(steps_B, massive_val_B, color="#2ea043", linewidth=2.5, alpha=0.6, label="Massive Pure")
+ax2.plot(steps_B, poly_val_B, color="#58a6ff", linewidth=2.5, alpha=0.6, linestyle="--", label="Poly-MoE")
+ax2.plot(steps_B, ewc_val_B, color="#d2a8ff", linewidth=2.5, alpha=0.6, linestyle=":", label="EWC + Prototype")
+ax2.plot(steps_B, cheby_val_B, color="#ff7b72", linewidth=3.5, alpha=1.0, label="Chebyshev MoE")
 
 ax2.set_title("Plasticity (Validation Loss B)", pad=20, fontsize=14, fontweight="bold", color="#ffffff")
 ax2.set_xlabel("Training Steps")
@@ -70,4 +78,4 @@ ax2.grid(True, linestyle="--", alpha=0.5)
 ax2.legend(frameon=True, facecolor="#0d1117", edgecolor="#30363d")
 
 plt.tight_layout()
-print("Chart generated: continual_learning_chart.png")
+plt.savefig("cheby_moe_chart.png", dpi=300, bbox_inches="tight")
