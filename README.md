@@ -69,5 +69,14 @@ modal run scripts/benchmark_cheby_kernel.py
 modal run -m scripts.modal_chebywave_multidigit
 ```
 
+## Linguistic Evaluation (DoubleO vs Transformer)
+
+To test DoubleO's capacity for generalized language modeling, we benchmarked the architecture against a standard Transformer (NanoGPT) on character-level next-token prediction (TinyShakespeare).
+
+![Linguistic Comparison Chart](linguistic_comparison_chart.png)
+
+### The Positional Memory Trade-off
+While the Resonant Cavity excels at position-independent mathematical algorithms (Zero Forgetting), character-level language modeling strictly requires absolute positional shifting (e.g., the letter 'e' follows 'r' in 'wherefore'). DoubleO operates entirely without $O(N^2)$ self-attention or positional embeddings. Consequently, a tiny 90k parameter DoubleO struggles to match an 800k NanoGPT in pure linguistic entropy reduction. Scaling the polynomial degree is required to reach Transformer parity on language.
+
 ## Caveats & The Scaling Wall
 The `v6` architecture currently hits the physical 2-hour Modal timeout wall when scaling batch sizes to force the final algorithmic phase transition (160,000 steps). Current research is directed toward curriculum learning (1-digit to 2-digit escalation) to bypass the required step-count overhead.
