@@ -100,15 +100,18 @@ This is a phenomenal result: it proves that by stacking enough Resonant Cavities
 ### The 5k-Step Convergence Showdown
 To definitively test the theoretical limits of pure dynamic state, we extended the evaluation of NanoGPT and DoubleO to 5,000 steps to monitor their long-term convergence trajectories. We tested two highly optimized purely dynamical variants against the Transformer baseline:
 
-1. **Massive Pure**: 6 Layers, 4x Internal Expansion (GELU), Scalar Decay (~897k params)
-2. **Radical Pure**: 8 Layers, 2x Internal Expansion (SwiGLU), Vector Decay (~921k params)
+1. **Massive Pure**: 6 Layers, 4x Internal Expansion (GELU), Symmetric Init (~897k params)
+2. **Einstein Pure**: 5 Layers, 4x Internal Expansion, Fourier Init, Input Gating (~835k params)
+3. **Radical Pure**: 8 Layers, 2x Internal Expansion (SwiGLU), Vector Decay (~921k params)
 
-![Radical Showdown Chart](radical_showdown_chart.png)
+![Einstein Showdown Chart](einstein_showdown_chart.png)
 
 The results demonstrate the fundamental behavioral difference between explicit attention and deep continuous state:
 - **NanoGPT** achieves a fast early lead due to exact token retrieval, but plateaus violently around `1.50` at step 1500.
 - **Massive Pure DoubleO** starts much slower due to the complexity of accumulating positional logic mathematically, but it possesses a substantially steeper convergence slope. By step 5000, it crossed `1.59` and showed no signs of plateauing.
-- **Radical Pure DoubleO** (1.73) significantly underperformed Massive Pure (1.59).
+- **Einstein Pure DoubleO** (1.71) and **Radical Pure DoubleO** (1.73) significantly underperformed Massive Pure.
+
+**The Limits of Human Inductive Bias**: The Einstein model attempted to force the layers to explicitly act as a Fourier Transform by explicitly initializing their decay rates logarithmically across the stack (`[0.1, 0.3, 0.5, 0.7, 0.9]`), and gave the model the ability to gate its inputs dynamically. Counter-intuitively, this caused the model to severely overfit to the training set (`Train: 1.43` vs `Val: 1.71`). By forcing the layers into predetermined frequency bands, we artificially constrained their ability to mathematically co-adapt. The Resonant Cavity algorithm is so raw that it vastly outperforms human-engineered frequency routing when simply initialized symmetrically and allowed to discover its own deep logic.
 
 **The Depth vs Width Revelation**: The Radical Pure model utilized state-of-the-art SwiGLU gating and was stacked deeper (8 layers vs 6). However, to balance the parameter budget, its internal Cavity Expansion was reduced to `2x` instead of `4x`. This proves definitively that for Resonant Cavities, **Cavity Width is structurally more important than Layer Depth**. The internal `dim * 4` space is non-negotiable for unrolling high-dimensional continuous logic!
 
