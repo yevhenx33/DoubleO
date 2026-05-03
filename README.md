@@ -4,21 +4,21 @@ This repository contains the architecture and experimental pipeline for **Double
 
 ## The Architecture Breakthrough
 
-Traditional Large Language Models (LLMs) rely on $O(N^2)$ Self-Attention and deep, multi-layer feed-forward networks to "think." They also suffer from catastrophic interference (forgetting) when trained on sequential tasks because all tasks overwrite the same dense weight matrices.
+Traditional sequential neural networks struggle with catastrophic interference (forgetting) because all sequential tasks overwrite the same dense weight matrices. Furthermore, deep neural networks require massive layer stacking to achieve deep reasoning, bloating parameter counts.
 
-**DoubleO v6 entirely abandons Attention and Layer Stacking.**
+**DoubleO v6 solves this through Spectral Recurrence and Dynamical Systems.**
 
 ### 1. The Chebyshev Linear Scan
-Instead of Attention, we use a custom, highly-optimized Triton kernel (`cheby_triton.py`) that executes a deterministic, $O(N)$ linear recurrence defined by the roots of Chebyshev polynomials. 
+We use a custom, highly-optimized Triton kernel (`cheby_triton.py`) that executes a deterministic, $O(N)$ linear recurrence defined by the roots of Chebyshev polynomials. 
 - It naturally compresses time into a fixed-size $H_t$ state vector.
 - By manually unrolling the kernel loops by a factor of 4 and enforcing FP16 precision, we achieve sub-0.1ms token execution latency on NVIDIA H100 GPUs.
-- Because it is a pure causal scan, it requires **no positional embeddings** and consumes **zero KV-cache memory**.
+- Because it is a pure causal scan, it requires **no positional embeddings** and consumes **zero memory caching overhead**.
 
 ### 2. The Resonant Cavity
-Instead of stacking 24 distinct neural network layers (which bloats parameters into the billions), DoubleO uses a singular, highly efficient MLP block called the **Resonant Cavity**.
+Instead of stacking distinct neural network layers, DoubleO uses a singular, highly efficient MLP block called the **Resonant Cavity**.
 - The token state is passed into the cavity and loops recursively (`max_iterations = 24`).
 - It acts as a dynamical system, bouncing the logic until it converges on an attractor state. 
-- We achieve the deep reasoning depth of a 24-layer Transformer using the physical parameter footprint of a 1-layer model (~220,000 parameters).
+- We achieve immense reasoning depth iteratively, allowing a tiny ~220,000 parameter model to perform complex multi-digit arithmetic logic.
 
 ### 3. The Auto-Router (Zero-Forgetting)
 To solve catastrophic forgetting, DoubleO utilizes a dynamic task router. By scaling the inputs mathematically, the model shifts different logical operations (e.g., Addition vs. Subtraction) into completely orthogonal polynomial frequency bands ($T_2(x)$, $T_3(x)$). 
