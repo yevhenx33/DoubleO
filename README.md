@@ -76,7 +76,17 @@ To test DoubleO's capacity for generalized language modeling, we benchmarked the
 ![Linguistic Comparison Chart](linguistic_comparison_chart.png)
 
 ### The Positional Memory Trade-off
-While the Resonant Cavity excels at position-independent mathematical algorithms (Zero Forgetting), character-level language modeling strictly requires absolute positional shifting (e.g., the letter 'e' follows 'r' in 'wherefore'). DoubleO operates entirely without $O(N^2)$ self-attention or positional embeddings. Consequently, a tiny 90k parameter DoubleO struggles to match an 800k NanoGPT in pure linguistic entropy reduction. Scaling the polynomial degree is required to reach Transformer parity on language.
+While the Resonant Cavity excels at position-independent mathematical algorithms (Zero Forgetting), character-level language modeling strictly requires absolute positional shifting (e.g., the letter 'e' follows 'r' in 'wherefore'). DoubleO operates entirely without $O(N^2)$ self-attention or positional embeddings. Consequently, a tiny 90k parameter DoubleO struggles to match an 800k NanoGPT in pure linguistic entropy reduction. 
+
+### Solving the Positional Trade-off
+To bridge the positional gap and scale DoubleO up to NanoGPT's 800k parameter footprint, we orchestrated a 4-way parallel sweep testing different structural enhancements on the character-level language task:
+
+![Linguistic Sweep Results](linguistic_sweep_results.png)
+
+1. **Multi-Head Cavity (3.32 Loss)**: Reshaping the matrix into parallel 64-dim heads bypassed the hardware memory limit but failed to provide any structural positional awareness, proving that pure scale does not solve entropy without relative context.
+2. **Temporal Decay (2.08 Loss)**: Simply introducing a learned exponential decay factor ($\lambda$) to the transition matrix gave the continuous state a native sense of "recency," massively bridging the gap toward the Transformer baseline purely dynamically.
+3. **RoPE Injection (2.03 Loss)**: Explicitly rotating the embeddings before the polynomial scan mathematically enforced absolute sequence positioning.
+4. **Hybrid Attention (1.91 Loss)**: Injecting a single $O(N^2)$ sliding window Attention layer immediately before the Resonant Cavity provided the exact short-term memory required to track character spellings, pushing DoubleO aggressively toward Transformer parity while retaining its infinite-depth reasoning.
 
 ## Caveats & The Scaling Wall
 The `v6` architecture currently hits the physical 2-hour Modal timeout wall when scaling batch sizes to force the final algorithmic phase transition (160,000 steps). Current research is directed toward curriculum learning (1-digit to 2-digit escalation) to bypass the required step-count overhead.
