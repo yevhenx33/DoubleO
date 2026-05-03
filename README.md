@@ -141,15 +141,15 @@ To test the "Zero-Forgetting" hypothesis of the Resonant Cavity architecture, we
 **The Physics of Continuous Collapse**
 Initially, we hypothesized that standard Resonant Cavities would resist catastrophic forgetting. **The empirical data proved exactly the opposite.** All shared-state Resonant Cavity architectures (Massive Pure, Poly-MoE, and even EWC) suffered instant, total structural collapse on Task A the exact moment Phase 2 began. Because the Resonant Cavity integrates weight changes over deep polynomial iterations ($A^n$), even tiny sub-gradient shifts in the shared state exponentially blow up the previous task's geometric boundaries!
 
-**The Breakthrough: Chebyshev MoE (The "CEO and Engineers" Paradigm)**
-To solve this fundamental physical limitation, we constructed the **Chebyshev Mixture of Experts (Cheby-MoE)**. This architecture strictly divides labor:
+**The Breakthrough: DoubleO (The "CEO and Engineers" Paradigm)**
+To solve this fundamental physical limitation, we constructed the **DoubleO Architecture**. This architecture strictly divides labor:
 1. **The CEO (Temporal Router)**: A miniature continuous state model that parses input topology with temporal momentum.
 2. **The Engineers (Isolated Experts)**: Two completely disjoint Resonant Cavities.
 
 During Phase 2, we completely froze the Shakespeare Engineer and applied an Empirical Fisher (EWC) penalty *exclusively* to the CEO Router to lock its decision boundaries.
 
 **The Result was an Absolute Triumph.**
-Chebyshev MoE achieved **Zero Structural Collapse**. The loss on Shakespeare remained stable at `~2.3`, successfully preventing Catastrophic Forgetting while achieving identical plasticity (`~4.4`) on the Math task.
+DoubleO achieved **Zero Structural Collapse**. The loss on Shakespeare remained stable at `~2.3`, successfully preventing Catastrophic Forgetting while achieving identical plasticity (`~4.4`) on the Math task.
 
 This empirically proves that to build an infinitely capable continuous-state model without catastrophic forgetting, you cannot rely on a single shared state space. You must rely on a **Generalist Foundation (CEO)** seamlessly querying **Frozen Structural Experts (Engineers)**.
 
