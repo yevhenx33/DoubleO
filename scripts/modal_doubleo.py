@@ -136,38 +136,16 @@ class DoubleO(nn.Module):
         if targets is not None:
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
             
-        return logits, loss, w
+        return logits, loss, w, logits_1, logits_2
 
-def compute_ceo_fisher(model, train_A, device, block_size=256, num_samples=1000):
-    model.eval()
-    fisher_dict = {}
-    optimal_weights = {}
-    
+def snapshot_ceo_weights(model):
+    """Save a deep copy of all CEO parameters for L2 anchoring."""
+    anchor = {}
     ceo_names = ["router_emb", "router"]
     for name, param in model.named_parameters():
-        if any(c in name for c in ceo_names) and param.requires_grad:
-            fisher_dict[name] = torch.zeros_like(param)
-            optimal_weights[name] = param.clone().detach()
-            
-    count = 0
-    for _ in range(num_samples):
-        ix = torch.randint(len(train_A) - block_size, (1,))
-        x = train_A[ix:ix+block_size].unsqueeze(0).to(device)
-        y = train_A[ix+1:ix+block_size+1].unsqueeze(0).to(device)
-        
-        model.zero_grad()
-        logits, loss, _ = model(x, y)
-        loss_sum = loss * block_size
-        loss_sum.backward()
-        
-        for name, param in model.named_parameters():
-            if name in fisher_dict and param.grad is not None:
-                fisher_dict[name] += param.grad.data ** 2
-        count += 1
-        
-    for name in fisher_dict:
-        fisher_dict[name] /= count
-    return fisher_dict, optimal_weights
+        if any(c in name for c in ceo_names):
+            anchor[name] = param.clone().detach()
+    return anchor
 
 @app.function(image=image, secrets=secrets, gpu="H100", timeout=3600)
 def run_model_eval():
@@ -209,13 +187,14 @@ def run_model_eval():
     model = DoubleO(vocab_size=vocab_size, config=config).cuda()
         
     params = sum(p.numel() for p in model.parameters())
-    print(f"[DoubleO] Initialized. Vocab: {vocab_size}, Params: {params}")
+    print(f"[DoubleO-v2] Initialized. Vocab: {vocab_size}, Params: {params}")
     
-    import torch._dynamo
-    torch._dynamo.config.suppress_errors = True
-    model = torch.compile(model)
-    
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.1)
+    # --- Main optimizer (CEO + Expert 1) ---
+    optimizer_main = torch.optim.AdamW(
+        [p for n, p in model.named_parameters() if "_2" not in n and p.requires_grad],
+        lr=1e-3, weight_decay=0.1
+    )
+    optimizer_expert2 = None  # Created after Phase 1
     
     metrics = {
         "val_A": [],
@@ -226,11 +205,11 @@ def run_model_eval():
     STEPS_PHASE_2 = 2000
     TOTAL_STEPS = STEPS_PHASE_1 + STEPS_PHASE_2
     
-    fisher_dict = None
-    optimal_weights = None
-    lambda_ewc = 0.01
+    ceo_anchor = None
+    lambda_l2 = 2.0
+    rehearsal_ratio = 0.15
     
-    # During Phase 1, we freeze Expert 2 entirely so it stays pristine for Task B
+    # Phase 1: Freeze Expert 2 entirely
     for name, param in model.named_parameters():
         if "_2" in name:
             param.requires_grad = False
@@ -241,8 +220,8 @@ def run_model_eval():
         current_task = 'A' if step < STEPS_PHASE_1 else 'B'
         
         if step == STEPS_PHASE_1:
-            print("\n[DoubleO] Phase 1 Complete. Computing FIM exclusively on CEO (Router)...")
-            fisher_dict, optimal_weights = compute_ceo_fisher(model, train_A, device=torch.device("cuda"))
+            print("\n[DoubleO-v2] Phase 1 Complete. Snapshotting CEO weights for L2 anchor...")
+            ceo_anchor = snapshot_ceo_weights(model)
             
             frozen_count = 0
             for name, param in model.named_parameters():
@@ -250,54 +229,88 @@ def run_model_eval():
                     param.requires_grad = False
                     frozen_count += param.numel()
                 if "_2" in name:
-                    param.requires_grad = True # Unfreeze Expert 2
-            print(f"[DoubleO] Frozen Expert 1 ({frozen_count} params). Phase 2 starting.\n")
+                    param.requires_grad = True
+            
+            # Create Expert 2 optimizer
+            expert2_params = [p for n, p in model.named_parameters() if "_2" in n and p.requires_grad]
+            optimizer_expert2 = torch.optim.AdamW(expert2_params, lr=1e-3, weight_decay=0.1)
+            
+            # Rebuild main optimizer (CEO only now)
+            optimizer_main = torch.optim.AdamW(
+                [p for n, p in model.named_parameters() if "_2" not in n and "_1" not in n and p.requires_grad],
+                lr=1e-3, weight_decay=0.1
+            )
+            print(f"[DoubleO-v2] Frozen Expert 1 ({frozen_count} params). Phase 2 starting.\n")
         
-        x, y = get_batch('train', task=current_task)
-        logits, ce_loss, w = model(x, y)
+        # --- Rehearsal buffer ---
+        if current_task == 'B' and torch.rand(1).item() < rehearsal_ratio:
+            x, y = get_batch('train', task='A')
+            rehearsal = True
+        else:
+            x, y = get_batch('train', task=current_task)
+            rehearsal = False
         
-        # Add a tiny router auxiliary loss to encourage it to use Expert 1 in Phase 1, and Expert 2 in Phase 2
-        aux_target = 0 if current_task == 'A' else 1
+        logits, ce_loss, w, logits_1, logits_2 = model(x, y)
+        
+        # Router auxiliary
+        aux_target = 0 if (current_task == 'A' or rehearsal) else 1
         w_mean = w.mean(dim=(0, 1))
         aux_loss = 0.1 * ((w_mean[aux_target] - 1.0) ** 2)
         
-        loss = ce_loss + aux_loss
-        ewc_penalty = 0.0
-        
-        if current_task == 'B' and fisher_dict is not None:
-            for name, param in model.named_parameters():
-                if name in fisher_dict:
-                    ewc_penalty += (fisher_dict[name] * (param - optimal_weights[name]) ** 2).sum()
+        if current_task == 'A':
+            # Phase 1: train CEO + Expert 1 normally
+            loss = ce_loss + aux_loss
+            optimizer_main.zero_grad(set_to_none=True)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer_main.step()
+        else:
+            # Phase 2: dual optimizer
+            # 1) Train Expert 2 directly on Math
+            expert2_loss = F.cross_entropy(logits_2.view(-1, logits_2.size(-1)), y.view(-1))
+            optimizer_expert2.zero_grad(set_to_none=True)
+            expert2_loss.backward(retain_graph=True)
+            torch.nn.utils.clip_grad_norm_([p for n, p in model.named_parameters() if "_2" in n], 1.0)
+            optimizer_expert2.step()
+            
+            # 2) Train CEO with L2 anchor
+            router_loss = aux_loss
+            l2_penalty = 0.0
+            if ceo_anchor is not None:
+                for name, param in model.named_parameters():
+                    if name in ceo_anchor:
+                        l2_penalty += ((param - ceo_anchor[name]) ** 2).sum()
+                router_loss = router_loss + lambda_l2 * l2_penalty
             
             if step % 500 == 0:
-                print(f"  --> [EWC Diag] CE: {ce_loss.item():.4f} | Raw Penalty: {ewc_penalty.item():.2f} | Weighted: {((lambda_ewc / 2) * ewc_penalty).item():.4f}")
-                
-            loss = loss + (lambda_ewc / 2) * ewc_penalty
+                l2_val = l2_penalty.item() if isinstance(l2_penalty, torch.Tensor) else 0.0
+                print(f"  --> [Diag] Expert2 CE: {expert2_loss.item():.4f} | Aux: {aux_loss.item():.4f} | L2: {l2_val:.4f}")
             
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
+            optimizer_main.zero_grad(set_to_none=True)
+            router_loss.backward()
+            torch.nn.utils.clip_grad_norm_([p for n, p in model.named_parameters() if p.requires_grad and "_2" not in n], 1.0)
+            optimizer_main.step()
         
         if step % 50 == 0 or step == (TOTAL_STEPS-1):
             model.eval()
             with torch.no_grad():
                 vx_A, vy_A = get_batch('val', task='A')
-                _, vloss_A, _ = model(vx_A, vy_A)
-                metrics["val_A"].append((step, vloss_A.item()))
+                _, vloss_A, _, logits_1_v, _ = model(vx_A, vy_A)
+                vloss_A_s1 = F.cross_entropy(logits_1_v.view(-1, logits_1_v.size(-1)), vy_A.view(-1)).item()
+                metrics["val_A"].append((step, vloss_A_s1))
                 
-                vloss_B_val = None
+                vloss_B_s2 = None
                 if step >= STEPS_PHASE_1:
                     vx_B, vy_B = get_batch('val', task='B')
-                    _, vloss_B, _ = model(vx_B, vy_B)
-                    metrics["val_B"].append((step, vloss_B.item()))
-                    vloss_B_val = vloss_B.item()
+                    _, _, _, _, logits_2_v = model(vx_B, vy_B)
+                    vloss_B_s2 = F.cross_entropy(logits_2_v.view(-1, logits_2_v.size(-1)), vy_B.view(-1)).item()
+                    metrics["val_B"].append((step, vloss_B_s2))
                     
             if step < STEPS_PHASE_1:
-                print(f"[DoubleO] P1 (Shakespeare) Step {step:4d} | CE: {ce_loss.item():.4f} | Val A: {vloss_A.item():.4f} | Router w1={w_mean[0].item():.2f}")
+                print(f"[DoubleO-v2] P1 Step {step:4d} | CE: {ce_loss.item():.4f} | Expert1-Shk: {vloss_A_s1:.4f} | Router w1={w_mean[0].item():.2f}")
             else:
-                ewc_val = ewc_penalty.item() if isinstance(ewc_penalty, torch.Tensor) else 0.0
-                print(f"[DoubleO] P2 (Math) Step {step:4d} | CE: {ce_loss.item():.4f} | EWC: {ewc_val:.2f} | Val A: {vloss_A.item():.4f} | Val B: {vloss_B_val:.4f} | Router w2={w_mean[1].item():.2f}")
+                l2_val = l2_penalty.item() if isinstance(l2_penalty, torch.Tensor) else 0.0
+                print(f"[DoubleO-v2] P2 Step {step:4d} | Expert1-Shk: {vloss_A_s1:.4f} | Expert2-Math: {vloss_B_s2:.4f} | L2: {l2_val:.4f} | Router w2={w_mean[1].item():.2f}")
             
     return {
         "name": "doubleo",
@@ -311,7 +324,7 @@ def main():
     res = run_model_eval.remote()
     
     final_dict = {res["name"]: res}
-    with open("data/cheby_moe_results.json", "w") as f:
+    with open("data/doubleo_v2_results.json", "w") as f:
         json.dump(final_dict, f)
         
-    print("Continual Gauntlet complete! Results saved to data/cheby_moe_results.json")
+    print("Continual Gauntlet complete! Results saved to data/doubleo_v2_results.json")
