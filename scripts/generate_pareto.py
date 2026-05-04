@@ -29,28 +29,28 @@ def get_loss(metrics_list, target_step):
 # ============================================================
 architectures = {
     "NanoGPT\n(Baseline)": {
-        "retention": get_loss(nano['val_A'], 3999),
-        "plasticity": get_loss(nano['val_B'], 3999),
+        "retention": nano['val_A'][-1][1],
+        "plasticity": nano['val_B'][-1][1],
         "color": "#888888", "marker": "s", "size": 120,
     },
     "DoubleO v1\n(EWC)": {
-        "retention": get_loss(doov1['val_A'], 3999),
-        "plasticity": get_loss(doov1['val_B'], 3999),
+        "retention": doov1['val_A'][-1][1],
+        "plasticity": doov1['val_B'][-1][1],
         "color": "#9467bd", "marker": "D", "size": 120,
     },
     "DoubleO v2\n(L2+Dual)": {
-        "retention": get_loss(doov2['val_A'], 3999),
-        "plasticity": get_loss(doov2['val_B'], 3999),
+        "retention": doov2['val_A'][-1][1],
+        "plasticity": doov2['val_B'][-1][1],
         "color": "#1f77b4", "marker": "^", "size": 140,
     },
     "Transformer\nH&S": {
-        "retention": get_loss(tmoe['val_A'], 3999),
-        "plasticity": get_loss(tmoe['val_B'], 3999),
+        "retention": tmoe['val_A'][-1][1],
+        "plasticity": tmoe['val_B'][-1][1],
         "color": "#d62728", "marker": "o", "size": 140,
     },
-    "Hybrid v3\n(Pre-Agg)": {
-        "retention": get_loss(hybrid['val_A'], 3999),
-        "plasticity": get_loss(hybrid['val_B'], 3999),
+    "Hybrid v3+\n(Scaled)": {
+        "retention": hybrid['val_A'][-1][1],
+        "plasticity": hybrid['val_B'][-1][1],
         "color": "#ff7f0e", "marker": "*", "size": 280,
     },
 }
@@ -89,7 +89,7 @@ label_offsets = {
     "DoubleO v1\n(EWC)": (15, 10),
     "DoubleO v2\n(L2+Dual)": (15, -20),
     "Transformer\nH&S": (-90, 20),
-    "Hybrid v3\n(Pre-Agg)": (-105, -25),
+    "Hybrid v3+\n(Scaled)": (-105, -25),
 }
 
 for name, d in architectures.items():

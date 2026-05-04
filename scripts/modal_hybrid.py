@@ -183,18 +183,29 @@ def run_model_eval():
         return x.cuda(), y.cuda()
 
     class CustomConfig(GPTConfig):
-        spoke_layers: int = 4
+        spoke_layers: int = 6
 
-    config = CustomConfig(block_size=256, vocab_size=vocab_size, n_head=4, n_embd=128, dropout=0.0, bias=False)
+    config = CustomConfig(block_size=256, vocab_size=vocab_size, n_head=8, n_embd=256, dropout=0.0, bias=False)
     model = HybridDoubleO(vocab_size=vocab_size, config=config).cuda()
         
     params = sum(p.numel() for p in model.parameters())
     print(f"[Hybrid-v3] Initialized. Vocab: {vocab_size}, Params: {params}")
     
-    # --- Main optimizer (CEO + Spoke 1 + shared LM head) ---
+    # --- Cosine LR schedule with warmup ---
+    peak_lr = 3e-4
+    warmup_steps = 200
+    
+    def get_lr(step, total, peak=peak_lr, warmup=warmup_steps):
+        if step < warmup:
+            return peak * step / warmup
+        decay_ratio = (step - warmup) / max(1, total - warmup)
+        return peak * 0.5 * (1.0 + np.cos(np.pi * decay_ratio))
+    
+    import numpy as np
+    
     optimizer_main = torch.optim.AdamW(
         [p for n, p in model.named_parameters() if "_2" not in n and p.requires_grad],
-        lr=1e-3, weight_decay=0.1
+        lr=peak_lr, weight_decay=0.1
     )
     optimizer_spoke2 = None
     
@@ -203,8 +214,8 @@ def run_model_eval():
         "val_B": []
     }
     
-    STEPS_PHASE_1 = 2000
-    STEPS_PHASE_2 = 2000
+    STEPS_PHASE_1 = 4000
+    STEPS_PHASE_2 = 4000
     TOTAL_STEPS = STEPS_PHASE_1 + STEPS_PHASE_2
     
     ceo_anchor = None
@@ -234,12 +245,12 @@ def run_model_eval():
                     param.requires_grad = True
             
             spoke2_params = [p for n, p in model.named_parameters() if "_2" in n and p.requires_grad]
-            optimizer_spoke2 = torch.optim.AdamW(spoke2_params, lr=1e-3, weight_decay=0.1)
+            optimizer_spoke2 = torch.optim.AdamW(spoke2_params, lr=peak_lr, weight_decay=0.1)
             
-            # Rebuild main optimizer (CEO + shared LM head, no spoke_1)
+            # Rebuild main optimizer (CEO only now)
             optimizer_main = torch.optim.AdamW(
                 [p for n, p in model.named_parameters() if "_2" not in n and "_1" not in n and p.requires_grad],
-                lr=1e-3, weight_decay=0.1
+                lr=peak_lr, weight_decay=0.1
             )
             print(f"[Hybrid-v3] Frozen Spoke 1 ({frozen_count} params). Phase 2 starting.\n")
         
@@ -258,6 +269,10 @@ def run_model_eval():
         aux_loss = 0.1 * ((w_mean[aux_target] - 1.0) ** 2)
         
         if current_task == 'A':
+            # Cosine LR for Phase 1
+            lr = get_lr(step, STEPS_PHASE_1)
+            for pg in optimizer_main.param_groups: pg['lr'] = lr
+            
             loss = ce_loss + aux_loss
             optimizer_main.zero_grad(set_to_none=True)
             loss.backward()
@@ -266,7 +281,11 @@ def run_model_eval():
         else:
             # Phase 2: Two separate forward passes to avoid in-place grad conflicts
             
-            # Pass 1: Train Spoke 2 directly on Math
+            # Pass 1: Train Spoke 2 directly on Math (cosine LR for Phase 2)
+            p2_step = step - STEPS_PHASE_1
+            lr = get_lr(p2_step, STEPS_PHASE_2)
+            for pg in optimizer_spoke2.param_groups: pg['lr'] = lr
+            
             spoke2_loss = F.cross_entropy(logits_2.view(-1, logits_2.size(-1)), y.view(-1))
             optimizer_spoke2.zero_grad(set_to_none=True)
             spoke2_loss.backward()
@@ -296,7 +315,7 @@ def run_model_eval():
             torch.nn.utils.clip_grad_norm_([p for n, p in model.named_parameters() if p.requires_grad and "_2" not in n], 1.0)
             optimizer_main.step()
         
-        if step % 50 == 0 or step == (TOTAL_STEPS-1):
+        if step % 100 == 0 or step == (TOTAL_STEPS-1):
             model.eval()
             with torch.no_grad():
                 vx_A, vy_A = get_batch('val', task='A')
