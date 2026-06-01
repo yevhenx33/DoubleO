@@ -1,0 +1,103 @@
+✓ Initialized. View run at https://modal.com/apps/yevhenx33/main/ap-cX2KLQQLUUBFNHBtSSvVZT
+✓ Created objects.
+├── 🔨 Created mount /home/ubuntu/DoubleO/scripts/test_ewc.py
+├── 🔨 Created mount /home/ubuntu/DoubleO/scripts
+└── 🔨 Created function run_chebywave_eval.
+/usr/local/lib/python3.12/site-packages/torch/_subclasses/functional_tensor.py:307: UserWarning: Failed to initialize NumPy: No module named 'numpy' (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:84.)
+  cpu = _conversion_method_template(device=torch.device("cpu"))
+Device: cuda
+  [v6 Multi-Digit Auto-Routed] Params: 219,812
+
+============================================================
+ACCURACY GAUNTLET: 2-Digit Math (Auto-Routed)
+============================================================
+
+--- Phase 1: Training on 2-Digit Addition (Task A) ---
+/usr/local/lib/python3.12/site-packages/torch/_inductor/compile_fx.py:322: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+  Step 0, loss: 3.0783, lr: 1.00e-03
+  Phase 1 took 107.7s
+
+--- Phase 2: 2-Digit Addition Accuracy (before Task B) ---
+
+
+  [Addition TRAIN (subset)] Accuracy:
+/usr/local/lib/python3.12/site-packages/torch/_inductor/lowering.py:7836: UserWarning: 
+Online softmax is disabled on the fly since Inductor decides to
+split the reduction. Cut an issue to PyTorch if this is an
+important use case and you want to speed it up with online
+softmax.
+
+  warnings.warn(
+    ✗ 90 + 5 =95  →  model: '811>|txetfodne|<'
+    ✗ 90 + 99 =189  →  model: '1818'
+    ✗ 92 + 23 =115  →  model: ''
+    ✗ 34 + 62 =96  →  model: '1-18'
+    ✗ 84 + 98 =182  →  model: '18-3'
+  [Addition TRAIN (subset)] Accuracy: 0/100 = 0.0%
+
+  [Addition TEST (subset)] Accuracy:
+    ✗ 99 + 82 =181  →  model: '1-11'
+    ✗ 94 + 55 =149  →  model: '1-1-'
+    ✗ 46 + 76 =122  →  model: '1-11'
+    ✗ 91 + 2 =93  →  model: '1-81'
+    ✗ 62 + 65 =127  →  model: '--8-'
+    ✗ 26 + 13 =39  →  model: ''
+    ✗ 10 + 78 =88  →  model: '1188'
+  [Addition TEST (subset)] Accuracy: 0/100 = 0.0%
+
+--- Phase 3: Sequential Training (Subtraction Only, with EWC) ---
+  [EWC] Computing Fisher Information Matrix on Phase 1 data...
+/usr/local/lib/python3.12/site-packages/torch/_inductor/lowering.py:7836: UserWarning: 
+Online softmax is disabled on the fly since Inductor decides to
+split the reduction. Cut an issue to PyTorch if this is an
+important use case and you want to speed it up with online
+softmax.
+
+  warnings.warn(
+W0503 15:53:41.412000 2 site-packages/torch/_dynamo/convert_frame.py:1743] [3/8] torch._dynamo hit config.recompile_limit (8)
+W0503 15:53:41.412000 2 site-packages/torch/_dynamo/convert_frame.py:1743] [3/8]    function: 'forward' (/root/test_ewc.py:163)
+W0503 15:53:41.412000 2 site-packages/torch/_dynamo/convert_frame.py:1743] [3/8]    last reason: 3/7: tensor 'h' requires_grad mismatch. expected requires_grad=1
+W0503 15:53:41.412000 2 site-packages/torch/_dynamo/convert_frame.py:1743] [3/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W0503 15:53:41.412000 2 site-packages/torch/_dynamo/convert_frame.py:1743] [3/8] To diagnose recompilation issues, see https://docs.pytorch.org/docs/main/user_guide/torch_compiler/compile/programming_model.recompilation.html
+  Step 0, CE loss: 2.8879, EWC loss: 0.0000
+  Phase 3 took 3.5s
+
+--- Phase 4: Final Accuracy (after Task B) ---
+
+
+  [Addition TRAIN (retention subset)] Accuracy:
+    ✗ 91 + 36 =127  →  model: '11'
+    ✗ 19 + 95 =114  →  model: '5'
+    ✗ 62 + 93 =155  →  model: '15'
+  [Addition TRAIN (retention subset)] Accuracy: 0/100 = 0.0%
+
+  [Addition TEST (retention subset)] Accuracy:
+    ✗ 26 + 25 =51  →  model: '11'
+    ✗ 40 + 75 =115  →  model: '1'
+  [Addition TEST (retention subset)] Accuracy: 0/100 = 0.0%
+
+  [Subtraction TRAIN (subset)] Accuracy:
+    ✗ 83 - 38 =45  →  model: '5'
+    ✗ 46 - 16 =30  →  model: '5'
+  [Subtraction TRAIN (subset)] Accuracy: 0/100 = 0.0%
+
+  [Subtraction TEST (subset)] Accuracy:
+    ✗ 96 - 66 =30  →  model: '5'
+    ✗ 33 - 32 =1  →  model: '10'
+    ✗ 75 - 2 =73  →  model: '55'
+    ✗ 89 - 54 =35  →  model: '5'
+    ✗ 81 - 17 =64  →  model: '15'
+    ✗ 76 - 53 =23  →  model: '5'
+    ✗ 83 - 23 =60  →  model: '5'
+  [Subtraction TEST (subset)] Accuracy: 2/100 = 2.0%
+
+============================================================
+SUMMARY: 2-Digit Math ChebyWave v6 (Auto-Routed)
+============================================================
+  Addition (before):  Train=0.0%  Test=0.0%
+  Addition (after):   Train=0.0%  Test=0.0%
+  Subtraction:        Train=0.0%  Test=2.0%
+  Retention Delta:    +0.0%
+Stopping app - local entrypoint completed.
+✓ App completed. View run at https://modal.com/apps/yevhenx33/main/ap-cX2KLQQLUUBFNHBtSSvVZT
